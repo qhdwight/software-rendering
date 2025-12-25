@@ -217,14 +217,14 @@ namespace Engine
     {
         // Add cube.
         constexpr F32 x[] = {2.0f, 2.0f, -2.0f, -2.0f};
-        constexpr F32 y[] = {2.0f, -2.0f, 2.0f, -2.0f};
+        constexpr F32 z[] = {2.0f, -2.0f, 2.0f, -2.0f};
         for (U32 i = 0; i < 4; ++i)
         {
             const U32 iCube = state.m_numCubes++;
 
             state.m_cubeInWorldX[iCube] = x[i];
-            state.m_cubeInWorldY[iCube] = y[i];
-            state.m_cubeInWorldZ[iCube] = 0.0f;
+            state.m_cubeInWorldY[iCube] = 0.0f;
+            state.m_cubeInWorldZ[iCube] = z[i];
 
             state.m_cubeInWorldW[iCube] = 1.0f;
             state.m_cubeInWorldE23[iCube] = 0.0f;
@@ -236,13 +236,14 @@ namespace Engine
         // Set camera looking at cube.
         {
             state.m_camInWorldX = 0.0f;
-            state.m_camInWorldY = 0.0f;
-            state.m_camInWorldZ = -4.0f;
+            state.m_camInWorldY = -4.0f;
+            state.m_camInWorldZ = 0.0f;
 
-            state.m_camInWorldW = 1.0f;
-            state.m_camInWorldE23 = 0.0f;
-            state.m_camInWorldE13 = 0.0f;
-            state.m_camInWorldE12 = 0.0f;
+            const Quatf q = FromAngleAxis(kHalfPi, Vec3f{-1.0f, 0.0f, 0.0f});
+            state.m_camInWorldW = q[0];
+            state.m_camInWorldE23 = q[1];
+            state.m_camInWorldE13 = q[2];
+            state.m_camInWorldE12 = q[3];
         }
 
         constexpr WNDCLASSEX kWindowClass = {
