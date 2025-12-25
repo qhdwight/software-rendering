@@ -200,17 +200,21 @@ namespace Engine
 
     constexpr Quatf operator*(const Quatf a, const Quatf b)
     {
-        // TODO: Check correctness.
-        const Quatf bInv = Conjugate(b);
-        const F32x4 a0 = Shuffle<0, 0, 0, 0>(a.m_v);
-        const F32x4 a1 = Shuffle<1, 1, 1, 1>(a.m_v);
-        const F32x4 a2 = Shuffle<2, 2, 2, 2>(a.m_v);
-        const F32x4 a3 = Shuffle<3, 3, 3, 3>(a.m_v);
-        const F32x4 b0 = Shuffle<0, 1, 2, 3>(b.m_v);
-        const F32x4 b1 = Shuffle<1, 0, 3, 2>(b.m_v);
-        const F32x4 b2 = Shuffle<2, 3, 0, 1>(bInv.m_v);
-        const F32x4 b3 = Shuffle<3, 2, 1, 0>(bInv.m_v);
-        return Quatf{a0 * b0 + (a2 * b2 - (a1 * b1 + a3 * b3))};
+        F32x4 a0 = Shuffle<0, 0, 0, 0>(a.m_v);
+        F32x4 a1 = Shuffle<1, 1, 1, 1>(a.m_v);
+        F32x4 a2 = Shuffle<2, 2, 2, 2>(a.m_v);
+        F32x4 a3 = Shuffle<3, 3, 3, 3>(a.m_v);
+        F32x4 b0 = Shuffle<0, 1, 2, 3>(b.m_v);
+        F32x4 b1 = Shuffle<1, 0, 3, 2>(b.m_v);
+        F32x4 b2 = Shuffle<2, 3, 0, 1>(b.m_v);
+        F32x4 b3 = Shuffle<3, 2, 1, 0>(b.m_v);
+        a1[0] *= -1.0f;
+        a1[2] *= -1.0f;
+        a2[0] *= -1.0f;
+        a2[3] *= -1.0f;
+        a3[0] *= -1.0f;
+        a3[1] *= -1.0f;
+        return Quatf{a0 * b0 + (a2 * b2 + (a1 * b1 + a3 * b3))};
     }
 
     constexpr Vec3f Rotate(const Quatf q, const Vec3f v)
@@ -227,17 +231,29 @@ namespace Engine
         return v + 2.0f * (q[0] * uv - Cross(u, uv));
     }
 
-    inline Vec3f Forward(const Quatf q)
+    constexpr Vec3f Forward(const Quatf q)
     {
         return Rotate(q, Vec3f{0.0f, 0.0f, 1.0f});
+    }
+
+    constexpr Vec3f Right(const Quatf q)
+    {
+        return Rotate(q, Vec3f{1.0f, 0.0f, 0.0f});
     }
 
     inline Quatf FromAngleAxis(const F32 angle, const Vec3f axis)
     {
         const F32 cosHalfAngle = Cos(angle * 0.5f);
-        const F32 sinHalfAngle = Sqrt(1.0f - cosHalfAngle * cosHalfAngle);
+        //    Sin^2(theta/2) + Cos^2(theta/2) = 1
+        // => Sin(theta/2) = Sqrt(1 - Cos^2(theta/2))
+        const F32 sinHalfAngle = Sqrt(1.0f - cosHalfAngle * cosHalfAngle) * (angle >= 0.0f ? 1.0f : -1.0f);
         const Vec3f scaledAxis = Normalize(axis) * sinHalfAngle;
         return Quatf{cosHalfAngle, scaledAxis[0], scaledAxis[1], scaledAxis[2]};
+    }
+
+    inline Quatf Normalize(const Quatf q)
+    {
+        return Quatf(q.m_v / Sqrt(Dot(q.m_v, q.m_v)));
     }
 
     struct Pose

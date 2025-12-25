@@ -26,6 +26,12 @@ namespace Engine
         void *m_pixels = nullptr;
         HBITMAP m_hBitmap = nullptr;
         HDC m_hMemDC = nullptr;
+        LONG m_mouseX = 0;
+        LONG m_mouseY = 0;
+        bool m_forward = false;
+        bool m_backward = false;
+        bool m_left = false;
+        bool m_right = false;
     };
 
     struct State
@@ -96,6 +102,41 @@ namespace Engine
                 const HDC hDC = BeginPaint(hWnd, &ps);
                 BitBlt(hDC, 0, 0, kWindowWidth, kWindowHeight, resources.m_hMemDC, 0, 0, SRCCOPY);
                 EndPaint(hWnd, &ps);
+                return 0;
+            }
+            case WM_INPUT: {
+                UINT dwSize = sizeof(RAWINPUT);
+                RAWINPUT raw;
+                GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam), RID_INPUT, &raw, &dwSize, sizeof(RAWINPUTHEADER));
+
+                if (raw.header.dwType == RIM_TYPEMOUSE)
+                {
+                    resources.m_mouseX += raw.data.mouse.lLastX;
+                    resources.m_mouseY += raw.data.mouse.lLastY;
+                }
+                else if (raw.header.dwType == RIM_TYPEKEYBOARD)
+                {
+                    const USHORT makeCode = raw.data.keyboard.MakeCode;
+                    const USHORT flags = raw.data.keyboard.Flags;
+                    const bool isBreak = (flags & RI_KEY_BREAK) != 0;
+                    switch (makeCode)
+                    {
+                        case 0x11:
+                            resources.m_forward = !isBreak;
+                            break;
+                        case 0x1F:
+                            resources.m_backward = !isBreak;
+                            break;
+                        case 0x1E:
+                            resources.m_left = !isBreak;
+                            break;
+                        case 0x20:
+                            resources.m_right = !isBreak;
+                            break;
+                        default:
+                            break;
+                    }
+                }
                 return 0;
             }
             default: {
@@ -186,6 +227,53 @@ namespace Engine
         return pixel;
     }
 
+    void HandleInput(const Resources &resources, State &state)
+    {
+        const Quatf camInWorld(
+            state.m_camInWorldW,
+            state.m_camInWorldE23,
+            state.m_camInWorldE13,
+            state.m_camInWorldE12
+            );
+
+        if (resources.m_mouseX)
+        {
+            const Quatf dQ = FromAngleAxis(0.002f * static_cast<F32>(resources.m_mouseX), Vec3f{0.0f, 1.0f, 0.0f});
+            const Quatf newCamInWorld = Normalize(camInWorld * dQ);
+            state.m_camInWorldW = newCamInWorld[0];
+            state.m_camInWorldE23 = newCamInWorld[1];
+            state.m_camInWorldE13 = newCamInWorld[2];
+            state.m_camInWorldE12 = newCamInWorld[3];
+        }
+
+        const Vec3f forwardInWorld = Forward(camInWorld);
+        const Vec3f rightInWorld = Right(camInWorld);
+        if (resources.m_forward)
+        {
+            state.m_camInWorldX += forwardInWorld[0] * 0.1f;
+            state.m_camInWorldY += forwardInWorld[1] * 0.1f;
+            state.m_camInWorldZ += forwardInWorld[2] * 0.1f;
+        }
+        if (resources.m_backward)
+        {
+            state.m_camInWorldX -= forwardInWorld[0] * 0.1f;
+            state.m_camInWorldY -= forwardInWorld[1] * 0.1f;
+            state.m_camInWorldZ -= forwardInWorld[2] * 0.1f;
+        }
+        if (resources.m_left)
+        {
+            state.m_camInWorldX -= rightInWorld[0] * 0.1f;
+            state.m_camInWorldY -= rightInWorld[1] * 0.1f;
+            state.m_camInWorldZ -= rightInWorld[2] * 0.1f;
+        }
+        if (resources.m_right)
+        {
+            state.m_camInWorldX += rightInWorld[0] * 0.1f;
+            state.m_camInWorldY += rightInWorld[1] * 0.1f;
+            state.m_camInWorldZ += rightInWorld[2] * 0.1f;
+        }
+    }
+
     void RenderFrame(const Resources &resources, const State &state)
     {
         const Pose camInWorld(
@@ -202,6 +290,7 @@ namespace Engine
                 )
             );
         U32 *pPixels = static_cast<U32 *>(resources.m_pixels);
+#pragma omp parallel for
         for (U32 y = 0; y < kWindowHeight; ++y)
         {
             for (U32 x = 0; x < kWindowWidth; ++x)
@@ -266,12 +355,33 @@ namespace Engine
             &resources
             );
 
+        const RAWINPUTDEVICE rid[] = {
+            {
+                .usUsagePage = 0x01,
+                .usUsage = 0x02,
+                .dwFlags = RIDEV_INPUTSINK,
+                .hwndTarget = resources.m_hWindow,
+            },
+            {
+                .usUsagePage = 0x01,
+                .usUsage = 0x06,
+                .dwFlags = RIDEV_INPUTSINK,
+                .hwndTarget = resources.m_hWindow,
+            }
+        };
+        RegisterRawInputDevices(rid, 2, sizeof(RAWINPUTDEVICE));
+
         ShowWindow(resources.m_hWindow, SW_SHOW);
         UpdateWindow(resources.m_hWindow);
 
         while (state.m_isRunning)
         {
-            RenderFrame(resources, state);
+            resources.m_mouseX = 0;
+            resources.m_mouseY = 0;
+            resources.m_forward = false;
+            resources.m_backward = false;
+            resources.m_left = false;
+            resources.m_right = false;
 
             MSG msg;
             while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
@@ -283,9 +393,13 @@ namespace Engine
 
                 TranslateMessage(&msg);
                 DispatchMessage(&msg);
-
-                Sleep(1);
             }
+
+            HandleInput(resources, state);
+
+            RenderFrame(resources, state);
+
+            Sleep(1);
         }
     }
 }
