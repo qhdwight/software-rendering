@@ -246,8 +246,8 @@ namespace Engine
             state.m_camInWorldE12 = newCamInWorld[3];
         }
 
-        const Vec3f forwardInWorld = Forward(camInWorld);
-        const Vec3f rightInWorld = Right(camInWorld);
+        const Vec3f forwardInWorld = Rotate(camInWorld, Vec3f{0.0f, 0.0f, 1.0f});
+        const Vec3f rightInWorld = Rotate(camInWorld, Vec3f{1.0f, 0.0f, 0.0f});
         if (resources.m_forward)
         {
             state.m_camInWorldX += forwardInWorld[0] * 0.1f;

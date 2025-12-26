@@ -231,16 +231,6 @@ namespace Engine
         return v + 2.0f * (q[0] * uv - Cross(u, uv));
     }
 
-    constexpr Vec3f Forward(const Quatf q)
-    {
-        return Rotate(q, Vec3f{0.0f, 0.0f, 1.0f});
-    }
-
-    constexpr Vec3f Right(const Quatf q)
-    {
-        return Rotate(q, Vec3f{1.0f, 0.0f, 0.0f});
-    }
-
     inline Quatf FromAngleAxis(const F32 angle, const Vec3f axis)
     {
         const F32 cosHalfAngle = Cos(angle * 0.5f);
@@ -276,7 +266,14 @@ namespace Engine
 
     constexpr Pose Inverse(const Pose &pose)
     {
+        //    T(x) = R @ x + t
+        // => R^-1 @ T(x) = x + R^-1 @ t
+        // => x = R^-1 @ T(x) - R^-1 @ t
+        // Thus T^-1(x) = R^-1 @ x - R^-1 @ t
+
+        // Assume the quaternion is unitized so that the conjugate is the inverse.
         const Quatf ori = Conjugate(pose.m_ori);
+        // Apply the inverse rotation since it is cheap for quaternions.
         const Vec3f pos = -InverseRotate(pose.m_ori, pose.m_pos);
         return Pose{pos, ori};
     }
